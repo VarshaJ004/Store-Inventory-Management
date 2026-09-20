@@ -1,0 +1,96 @@
+.navigation {
+    width: 240px;
+    min-height: 100vh;
+    height: 100vh;
+    background: #111111;
+    color: #ffffff;
+    padding: 32px 18px;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    box-sizing: border-box;
+  }
+  
+  .navigation-brand {
+    padding: 0 10px;
+    margin-bottom: 40px;
+  }
+  
+  .navigation-brand h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #ffffff;
+  }
+  
+  .navigation-brand span {
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: #888888;
+  }
+  
+  .navigation-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  
+  .navigation-item {
+    text-decoration: none;
+    color: #8f8f8f;
+    padding: 12px 16px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.15s ease, color 0.15s ease;
+    border: none;
+    background: transparent;
+    width: 100%;
+    cursor: pointer;
+    box-sizing: border-box;
+  }
+  
+  .navigation-item:hover {
+    background: #222222;
+    color: #ffffff;
+  }
+  
+  /* Active Page Highlight */
+  .navigation-item.active {
+    background: #ffffff;
+    color: #111111;
+    font-weight: 600;
+  }
+  
+  .navigation-item.active:hover {
+    background: #ffffff;
+    color: #111111;
+  }
+  
+  .nav-icon {
+    font-size: 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+  }
+  
+  .navigation-bottom {
+    margin-top: auto;
+    padding-top: 16px;
+  }
+  
+  .logout-button {
+    color: #888888;
+  }
+  
+  .logout-button:hover {
+    background: #222222;
+    color: #ffffff;
+  }
