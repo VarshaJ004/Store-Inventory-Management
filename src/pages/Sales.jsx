@@ -342,7 +342,7 @@ function Sales() {
   // COMPLETE SALE
   // ========================================
 
-  const completeSale = async () => {
+  const handleCompleteSale = async () => {
     if (cart.length === 0) {
       setError(
         "Add at least one product."
@@ -355,6 +355,11 @@ function Sales() {
       setError("");
       setMessage("");
 
+      const normalizedPaymentMethod =
+        paymentMethod.toLowerCase() === "gpay" ? "GPay" : "Cash";
+
+      const todayStr = new Date().toISOString().split("T")[0];
+
       const response = await fetch(
         `${API_URL}/api/sales`,
         {
@@ -366,11 +371,21 @@ function Sales() {
           },
 
           body: JSON.stringify({
-            paymentMethod,
+            paymentMethod: normalizedPaymentMethod,
+
+            grandTotal,
+
+            totalAmount: grandTotal,
+
+            date: todayStr,
 
             items: cart.map((item) => ({
-              productId: item.productId,
+              productId: item.productId ?? item.id,
+              productName: item.name,
+              category: item.category,
+              price: item.price,
               quantity: item.quantity,
+              amount: item.price * item.quantity,
             })),
           }),
         }
@@ -389,8 +404,6 @@ function Sales() {
 
       const totalAmount =
         result.sale?.totalAmount ?? result.data?.totalAmount ?? grandTotal;
-      const formattedPaymentMethod =
-        paymentMethod === "gpay" ? "GPay" : "Cash";
 
       setMessage(
         `Sale completed • ${result.sale?.invoiceNumber || result.data?.invoiceNumber || ""} • ₹${totalAmount}`
@@ -398,7 +411,7 @@ function Sales() {
 
       setCompletedSaleData({
         amount: totalAmount,
-        paymentMethod: formattedPaymentMethod,
+        paymentMethod: normalizedPaymentMethod,
       });
       setShowPopup(true);
 
@@ -415,6 +428,8 @@ function Sales() {
       setCompletingSale(false);
     }
   };
+
+  const completeSale = handleCompleteSale;
 
   const handleNewSale = () => {
     setShowPopup(false);
@@ -902,7 +917,7 @@ function Sales() {
                 cart.length === 0 ||
                 completingSale
               }
-              onClick={completeSale}
+              onClick={handleCompleteSale}
             >
               {completingSale
                 ? "Completing..."

@@ -147,6 +147,10 @@ const Sale = mongoose.model(
             required: true,
           },
 
+          category: {
+            type: String,
+          },
+
           price: {
             type: Number,
             required: true,
@@ -171,8 +175,13 @@ const Sale = mongoose.model(
 
       paymentMethod: {
         type: String,
-        enum: ["cash", "gpay"],
+        enum: ["Cash", "GPay", "cash", "gpay"],
         required: true,
+      },
+
+      date: {
+        type: String, // YYYY-MM-DD
+        default: () => new Date().toISOString().split("T")[0],
       },
 
       saleDate: {
@@ -925,6 +934,9 @@ app.post(
       const {
         items,
         paymentMethod,
+        date,
+        grandTotal,
+        totalAmount: reqTotal,
       } = req.body;
 
       // ------------------------------------------
@@ -946,15 +958,27 @@ app.post(
       // VALIDATE PAYMENT
       // ------------------------------------------
 
+      const methodClean = String(paymentMethod || "").trim().toLowerCase();
       if (
-        paymentMethod !== "cash" &&
-        paymentMethod !== "gpay"
+        methodClean !== "cash" &&
+        methodClean !== "gpay"
       ) {
         return res.status(400).json({
           message:
-            "Payment method must be cash or gpay.",
+            "Payment method must be Cash or GPay.",
         });
       }
+
+      const normalizedPaymentMethod =
+        methodClean === "gpay" ? "GPay" : "Cash";
+
+      const todayString =
+        new Date().toISOString().split("T")[0];
+
+      const saleDateString =
+        typeof date === "string" && date.trim().length >= 10
+          ? date.trim().slice(0, 10)
+          : todayString;
 
       const saleItems = [];
 
@@ -1005,6 +1029,9 @@ app.post(
           productName:
             product.name,
 
+          category:
+            product.category,
+
           price:
             product.price,
 
@@ -1019,12 +1046,15 @@ app.post(
       // CALCULATE TOTAL
       // ------------------------------------------
 
-      const totalAmount =
+      const calculatedTotal =
         saleItems.reduce(
           (total, item) =>
             total + item.amount,
           0
         );
+
+      const totalAmount =
+        Number(reqTotal || grandTotal || calculatedTotal);
 
       // ------------------------------------------
       // CREATE INVOICE NUMBER
@@ -1034,7 +1064,7 @@ app.post(
         `SALE-${Date.now()}`;
 
       // ------------------------------------------
-      // UPDATE INVENTORY
+      // UPDATE INVENTORY (STOCK DEDUCTION)
       // ------------------------------------------
 
       for (const item of saleItems) {
@@ -1068,7 +1098,11 @@ app.post(
 
           totalAmount,
 
-          paymentMethod,
+          paymentMethod:
+            normalizedPaymentMethod,
+
+          date:
+            saleDateString,
 
           saleDate: new Date(),
         });
@@ -1081,6 +1115,8 @@ app.post(
         message:
           "Sale completed successfully.",
 
+        status: "success",
+
         sale: {
           id: sale._id,
 
@@ -1090,11 +1126,17 @@ app.post(
 
           totalAmount,
 
-          paymentMethod,
+          paymentMethod:
+            sale.paymentMethod,
+
+          date:
+            sale.date,
 
           saleDate:
             sale.saleDate,
         },
+
+        data: sale,
       });
     } catch (err) {
       console.error(
@@ -1111,12 +1153,6 @@ app.post(
 
 // ======================================================
 // GET SALES
-//
-// This will be used later by Statements page.
-//
-// Optional:
-// /api/sales?paymentMethod=cash
-// /api/sales?paymentMethod=gpay
 // ======================================================
 
 app.get(
@@ -1127,20 +1163,23 @@ app.get(
         paymentMethod,
         from,
         to,
+        date,
       } = req.query;
 
       const filter = {};
 
       // Payment filter
-      if (
-        paymentMethod === "cash" ||
-        paymentMethod === "gpay"
-      ) {
+      if (paymentMethod) {
         filter.paymentMethod =
-          paymentMethod;
+          new RegExp(`^${paymentMethod}$`, "i");
       }
 
       // Date filter
+      if (date) {
+        filter.date = date;
+      }
+
+      // Date range filter
       if (from || to) {
         filter.saleDate = {};
 
@@ -1178,10 +1217,25 @@ app.get(
       const sales =
         await Sale.find(filter)
           .sort({
+            createdAt: -1,
             saleDate: -1,
           });
 
-      res.status(200).json(sales);
+      const formattedSales = sales.map((s) => {
+        const obj = s.toObject ? s.toObject() : s;
+        if (!obj.date) {
+          if (obj.saleDate) {
+            obj.date = new Date(obj.saleDate).toISOString().split("T")[0];
+          } else if (obj.createdAt) {
+            obj.date = new Date(obj.createdAt).toISOString().split("T")[0];
+          } else {
+            obj.date = new Date().toISOString().split("T")[0];
+          }
+        }
+        return obj;
+      });
+
+      res.status(200).json(formattedSales);
     } catch (err) {
       console.error(
         "Sales fetch error:",
