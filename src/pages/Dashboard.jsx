@@ -12,8 +12,8 @@ function Dashboard() {
     totalProducts: 0,
     totalStock: 0,
     lowStockProducts: [],
-    todaysSales: 0,
-    todaysRevenue: 0,
+    totalSalesToday: 0,
+    totalRevenue: 0,
     recentSales: [],
   });
 
@@ -24,12 +24,15 @@ function Dashboard() {
       const res = await fetch(`${API_BASE_URL}/dashboard`);
       if (res.ok) {
         const data = await res.json();
-        setDashboardData((prev) => ({
-          ...prev,
-          totalProducts: data.totalProducts || 0,
-          totalStock: data.totalStock || 0,
+        setDashboardData({
+          totalProducts: data.totalProducts ?? 0,
+          totalStock: data.totalStock ?? 0,
           lowStockProducts: data.lowStockProducts || [],
-        }));
+          totalSalesToday:
+            data.totalSalesToday ?? data.totalSales ?? data.todaysSales ?? 0,
+          totalRevenue: data.totalRevenue ?? data.todaysRevenue ?? 0,
+          recentSales: data.recentSales || [],
+        });
       } else {
         console.error("Failed to load dashboard data from server");
       }
@@ -43,14 +46,21 @@ function Dashboard() {
   useEffect(() => {
     fetchDashboardData();
 
-    // Auto-update dashboard metrics whenever new stock is added
+    // Auto-update dashboard metrics whenever new stock or sale is updated
     window.addEventListener("stockInUpdated", fetchDashboardData);
     return () => {
       window.removeEventListener("stockInUpdated", fetchDashboardData);
     };
   }, []);
 
-  const { totalProducts, totalStock, lowStockProducts, todaysSales, todaysRevenue, recentSales } = dashboardData;
+  const {
+    totalProducts,
+    totalStock,
+    lowStockProducts,
+    totalSalesToday,
+    totalRevenue,
+    recentSales,
+  } = dashboardData;
 
   return (
     <div className="dashboard-main">
@@ -84,23 +94,27 @@ function Dashboard() {
           <div className="summary-icon">▥</div>
           <div>
             <p>Total Stock</p>
-            <h2>{loading ? "..." : totalStock}</h2>
+            <h2>{loading ? "..." : Number(totalStock || 0).toLocaleString("en-IN")}</h2>
+          </div>
+        </div>
+
+        <div className="summary-card">
+          <div className="summary-icon">🛍</div>
+          <div>
+            <p>Total Sales</p>
+            <h2>{loading ? "..." : totalSalesToday}</h2>
           </div>
         </div>
 
         <div className="summary-card">
           <div className="summary-icon">₹</div>
           <div>
-            <p>Today's Sales</p>
-            <h2>{todaysSales || "—"}</h2>
-          </div>
-        </div>
-
-        <div className="summary-card">
-          <div className="summary-icon">₹</div>
-          <div>
-            <p>Today's Revenue</p>
-            <h2>₹{todaysRevenue.toLocaleString("en-IN")}</h2>
+            <p>Total Revenue</p>
+            <h2>
+              {loading
+                ? "..."
+                : `₹${Number(totalRevenue || 0).toLocaleString("en-IN")}`}
+            </h2>
           </div>
         </div>
       </section>

@@ -5,7 +5,8 @@ function Navigation() {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    navigate("/");
+    localStorage.removeItem("user");
+    navigate("/login");
   };
 
   return (
@@ -64,6 +65,16 @@ function Navigation() {
         >
           <span className="nav-icon">▤</span>
           <span>Statements</span>
+        </NavLink>
+
+        <NavLink
+          to="/settings"
+          className={({ isActive }) =>
+            `navigation-item ${isActive ? "active" : ""}`
+          }
+        >
+          <span className="nav-icon">⚙</span>
+          <span>Settings</span>
         </NavLink>
       </nav>
 

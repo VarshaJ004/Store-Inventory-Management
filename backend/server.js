@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 require("dotenv").config();
 
 const app = express();
@@ -17,7 +18,8 @@ app.use(
   })
 );
 
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // ======================================================
 // MONGODB CONNECTION
@@ -36,6 +38,7 @@ mongoose
     console.log("MongoDB Connected Successfully");
 
     await seedInitialProducts();
+    await seedInitialAdmin();
   })
   .catch((err) => {
     console.error("Database connection error:", err);
@@ -194,6 +197,82 @@ const Sale = mongoose.model(
     }
   )
 );
+
+// ======================================================
+// USER / STAFF MODEL
+// ======================================================
+
+const User = mongoose.model(
+  "User",
+  new mongoose.Schema(
+    {
+      name: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+
+      email: {
+        type: String,
+        required: true,
+        trim: true,
+        lowercase: true,
+        unique: true,
+      },
+
+      username: {
+        type: String,
+        required: true,
+        trim: true,
+        lowercase: true,
+        unique: true,
+      },
+
+      password: {
+        type: String,
+        required: true,
+      },
+
+      role: {
+        type: String,
+        enum: ["Admin", "Staff"],
+        default: "Staff",
+      },
+
+      faceData: {
+        type: mongoose.Schema.Types.Mixed, // Stores base64 image or face descriptor array
+        default: null,
+      },
+    },
+    {
+      timestamps: true,
+    }
+  )
+);
+
+// Function to seed default admin if not present
+const seedInitialAdmin = async () => {
+  try {
+    const adminExists = await User.findOne({ username: "admin" });
+    if (!adminExists) {
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash("admin123", salt);
+
+      await User.create({
+        name: "Store Administrator",
+        email: "admin@fisat.ac.in",
+        username: "admin",
+        password: hashedPassword,
+        role: "Admin",
+        faceData: null,
+      });
+
+      console.log("Default admin created: admin / admin123");
+    }
+  } catch (err) {
+    console.error("Error seeding default admin:", err);
+  }
+};
 
 // ======================================================
 // INITIAL 57 PRODUCTS
@@ -1364,58 +1443,89 @@ app.get(
             (product.stock || 0) <= 10
         );
 
-      // Today's date range
-      const today =
-        new Date();
-
-      const startOfDay =
-        new Date(today);
-
-      startOfDay.setHours(
-        0,
-        0,
-        0,
-        0
-      );
-
-      const endOfDay =
-        new Date(today);
-
-      endOfDay.setHours(
-        23,
-        59,
-        59,
-        999
-      );
-
-      // Today's sales
-      const todaysSales =
-        await Sale.find({
-          saleDate: {
-            $gte: startOfDay,
-            $lte: endOfDay,
-          },
+      // Fetch all records from the Sale collection
+      const allSales =
+        await Sale.find().sort({
+          createdAt: -1,
+          saleDate: -1,
         });
 
-      const todaysRevenue =
-        todaysSales.reduce(
+      // Calculate totalRevenue by summing totalAmount of all sales
+      const totalRevenue =
+        allSales.reduce(
           (sum, sale) =>
-            sum +
-            (sale.totalAmount || 0),
+            sum + (Number(sale.totalAmount) || 0),
           0
         );
 
+      // Calculate total sales transaction count
+      const totalSalesToday =
+        allSales.length;
+
+      const totalSales =
+        allSales.length;
+
+      // Today's specific sales
+      const todayStr =
+        new Date().toISOString().split("T")[0];
+
+      const todaysSalesList =
+        allSales.filter((s) => {
+          if (s.date && s.date.startsWith(todayStr)) return true;
+          if (s.saleDate) {
+            const dStr =
+              new Date(s.saleDate).toISOString().split("T")[0];
+            if (dStr === todayStr) return true;
+          }
+          return false;
+        });
+
+      const todaysSales =
+        todaysSalesList.length;
+
+      const todaysRevenue =
+        todaysSalesList.reduce(
+          (sum, sale) =>
+            sum + (Number(sale.totalAmount) || 0),
+          0
+        );
+
+      // Format recent sales for dashboard panel
+      const recentSales =
+        allSales.slice(0, 6).map((sale) => {
+          const firstItem =
+            Array.isArray(sale.items) && sale.items.length > 0
+              ? sale.items[0]
+              : null;
+
+          const productTitle =
+            firstItem
+              ? `${firstItem.productName || firstItem.name || "Item"}${
+                  sale.items.length > 1
+                    ? ` (+${sale.items.length - 1} more)`
+                    : ""
+                }`
+              : "Counter Sale";
+
+          return {
+            id: sale._id || sale.id || sale.invoiceNumber,
+            product: productTitle,
+            paymentMethod: sale.paymentMethod || "Cash",
+            amount: Number(sale.totalAmount || 0).toLocaleString("en-IN"),
+            date: sale.date || todayStr,
+          };
+        });
+
       res.status(200).json({
         totalProducts,
-
         totalStock,
-
-        todaysSales:
-          todaysSales.length,
-
+        totalRevenue,
+        totalSalesToday,
+        totalSales,
+        todaysSales,
         todaysRevenue,
-
         lowStockProducts,
+        recentSales,
       });
     } catch (err) {
       console.error(
@@ -1429,6 +1539,254 @@ app.get(
     }
   }
 );
+
+// ======================================================
+// USER / STAFF MANAGEMENT ROUTES
+// ======================================================
+
+// LOGIN AUTHENTICATION (Username & Password)
+app.post("/api/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({
+        message: "Username and password are required.",
+      });
+    }
+
+    const trimmedUsername = username.trim().toLowerCase();
+    const user = await User.findOne({ username: trimmedUsername });
+
+    if (!user) {
+      return res.status(401).json({
+        message: "Invalid username or password.",
+      });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({
+        message: "Invalid username or password.",
+      });
+    }
+
+    const userObj = user.toObject();
+    delete userObj.password;
+
+    res.status(200).json({
+      message: "Login successful.",
+      user: userObj,
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 1. GET ALL USERS (Exclude password)
+app.get("/api/users", async (req, res) => {
+  try {
+    const users = await User.find()
+      .select("-password")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json(users);
+  } catch (err) {
+    console.error("Fetch users error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. GET SINGLE USER BY ID
+app.get("/api/users/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const filter = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { id };
+    const user = await User.findOne(filter).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    res.status(200).json(user);
+  } catch (err) {
+    console.error("Fetch user error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. REGISTER / CREATE NEW USER
+app.post("/api/users", async (req, res) => {
+  try {
+    const { name, email, username, password, role } = req.body;
+
+    if (!name || !email || !username || !password) {
+      return res.status(400).json({
+        message: "Name, email, username, and password are required.",
+      });
+    }
+
+    const trimmedUsername = username.trim().toLowerCase();
+    const trimmedEmail = email.trim().toLowerCase();
+
+    // Check unique username and email
+    const existingUser = await User.findOne({
+      $or: [{ username: trimmedUsername }, { email: trimmedEmail }],
+    });
+
+    if (existingUser) {
+      if (existingUser.username === trimmedUsername) {
+        return res.status(400).json({ message: "Username already taken." });
+      }
+      if (existingUser.email === trimmedEmail) {
+        return res.status(400).json({ message: "Email already registered." });
+      }
+    }
+
+    // Hash password with bcrypt
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    const newUser = await User.create({
+      name: name.trim(),
+      email: trimmedEmail,
+      username: trimmedUsername,
+      password: hashedPassword,
+      role: role || "Staff",
+      faceData: null,
+    });
+
+    const userObj = newUser.toObject();
+    delete userObj.password;
+
+    res.status(201).json({
+      message: "Staff user registered successfully.",
+      user: userObj,
+    });
+  } catch (err) {
+    console.error("Create user error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. UPDATE USER
+app.put("/api/users/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, email, username, password, role } = req.body;
+
+    const filter = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { id };
+    const user = await User.findOne(filter);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (username) {
+      const trimmedUsername = username.trim().toLowerCase();
+      const existing = await User.findOne({
+        username: trimmedUsername,
+        _id: { $ne: user._id },
+      });
+      if (existing) {
+        return res.status(400).json({ message: "Username is already in use." });
+      }
+      user.username = trimmedUsername;
+    }
+
+    if (email) {
+      const trimmedEmail = email.trim().toLowerCase();
+      const existing = await User.findOne({
+        email: trimmedEmail,
+        _id: { $ne: user._id },
+      });
+      if (existing) {
+        return res.status(400).json({ message: "Email is already in use." });
+      }
+      user.email = trimmedEmail;
+    }
+
+    if (name) user.name = name.trim();
+    if (role) user.role = role;
+
+    if (password && password.trim().length > 0) {
+      const salt = await bcrypt.genSalt(10);
+      user.password = await bcrypt.hash(password, salt);
+    }
+
+    await user.save();
+
+    const userObj = user.toObject();
+    delete userObj.password;
+
+    res.status(200).json({
+      message: "User updated successfully.",
+      user: userObj,
+    });
+  } catch (err) {
+    console.error("Update user error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. DELETE USER
+app.delete("/api/users/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const filter = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { id };
+
+    const deletedUser = await User.findOneAndDelete(filter);
+
+    if (!deletedUser) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    res.status(200).json({
+      message: "User deleted successfully.",
+      deletedId: id,
+    });
+  } catch (err) {
+    console.error("Delete user error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. UPDATE USER FACE DATA (BIOMETRIC REGISTRATION)
+app.post("/api/users/:id/face", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { faceData, faceImage } = req.body;
+    const dataToStore = faceData || faceImage;
+
+    if (!dataToStore) {
+      return res.status(400).json({
+        message: "No face image or descriptor data received.",
+      });
+    }
+
+    const filter = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { id };
+    const user = await User.findOne(filter);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    user.faceData = dataToStore;
+    await user.save();
+
+    const userObj = user.toObject();
+    delete userObj.password;
+
+    res.status(200).json({
+      message: "Face enrolled successfully.",
+      user: userObj,
+    });
+  } catch (err) {
+    console.error("Register face error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ======================================================
 // TEST ROUTE

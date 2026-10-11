@@ -8,12 +8,13 @@ import {
 
 import Navigation from "./pages/Navigation";
 
+import Login from "./pages/Login";
 import Inventory from "./pages/Inventory";
 import StockIn from "./pages/StockIn";
 import Dashboard from "./pages/Dashboard";
 import Sales from "./pages/Sales";
-
 import Statements from "./pages/Statements";
+import Settings from "./pages/Settings";
 
 function MainLayout() {
   return (
@@ -39,60 +40,39 @@ function MainLayout() {
   );
 }
 
+function ProtectedLayout() {
+  const user = localStorage.getItem("user");
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return <MainLayout />;
+}
+
+function RootRedirect() {
+  const user = localStorage.getItem("user");
+  return user ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Standalone Login Screen (No Sidebar) */}
+        <Route path="/login" element={<Login />} />
 
-        <Route element={<MainLayout />}>
-
-          <Route
-            path="/dashboard"
-            element={<Dashboard />}
-          />
-
-          <Route
-            path="/inventory"
-            element={<Inventory />}
-          />
-
-          <Route
-            path="/stock-in"
-            element={<StockIn />}
-          />
-
-          <Route
-            path="/sales"
-            element={<Sales />}
-          />
-
-          <Route
-            path="/statements"
-            element={<Statements />}
-          />
-
+        {/* Authenticated Application Routes (With Sidebar) */}
+        <Route element={<ProtectedLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/inventory" element={<Inventory />} />
+          <Route path="/stock-in" element={<StockIn />} />
+          <Route path="/sales" element={<Sales />} />
+          <Route path="/statements" element={<Statements />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
 
-        <Route
-          path="/"
-          element={
-            <Navigate
-              to="/inventory"
-              replace
-            />
-          }
-        />
-
-        <Route
-          path="*"
-          element={
-            <Navigate
-              to="/inventory"
-              replace
-            />
-          }
-        />
-
+        {/* Root and Fallback Navigation */}
+        <Route path="/" element={<RootRedirect />} />
+        <Route path="*" element={<RootRedirect />} />
       </Routes>
     </BrowserRouter>
   );
