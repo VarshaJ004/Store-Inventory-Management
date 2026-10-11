@@ -157,6 +157,29 @@ export default function Statements() {
       const utcToday = now.toISOString().split("T")[0];
       const utcCurrentMonth = now.toISOString().slice(0, 7);
 
+      const formatExcelDate = (dateVal) => {
+        if (!dateVal) return " --";
+        if (typeof dateVal === "string") {
+          const trimmed = dateVal.trim();
+          const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+          if (isoMatch) {
+            return ` ${isoMatch[3]}-${isoMatch[2]}-${isoMatch[1]}`;
+          }
+          const dmyMatch = trimmed.match(/^(\d{2})-(\d{2})-(\d{4})/);
+          if (dmyMatch) {
+            return ` ${dmyMatch[1]}-${dmyMatch[2]}-${dmyMatch[3]}`;
+          }
+        }
+        const d = new Date(dateVal);
+        if (!isNaN(d.getTime())) {
+          const day = String(d.getDate()).padStart(2, "0");
+          const month = String(d.getMonth() + 1).padStart(2, "0");
+          const year = d.getFullYear();
+          return ` ${day}-${month}-${year}`;
+        }
+        return ` ${dateVal}`;
+      };
+
       const getSaleDateStr = (sale) => {
         if (sale.date && typeof sale.date === "string" && sale.date.includes("-")) {
           return sale.date.trim().slice(0, 10);
@@ -182,6 +205,15 @@ export default function Statements() {
         return localToday;
       };
 
+      const salesHeaders = [
+        "Date",
+        "Invoice Number",
+        "Payment Method",
+        "Total Items",
+        "Total Amount (₹)",
+        "Items Summary",
+      ];
+
       // 4. Daily Sales
       if (rawType.includes("daily") || rawType === "4") {
         const dailySales = allSales.filter((sale) => {
@@ -189,31 +221,45 @@ export default function Statements() {
           return d === localToday || d === utcToday;
         });
 
-        const headers = [
-          "Invoice Number",
-          "Date",
-          "Payment Method",
-          "Total Items",
-          "Total Amount (₹)",
-          "Items Summary",
-        ];
+        const totalRevenue = dailySales.reduce(
+          (sum, sale) => sum + Number(sale.totalAmount || 0),
+          0
+        );
+        const totalUnits = dailySales.reduce((sum, sale) => {
+          return (
+            sum +
+            (Array.isArray(sale.items)
+              ? sale.items.reduce((s, i) => s + (Number(i.quantity ?? i.qty) || 1), 0)
+              : Number(sale.totalItems) || 1)
+          );
+        }, 0);
 
         const rows = dailySales.map((sale) => [
+          formatExcelDate(getSaleDateStr(sale)),
           sale.invoiceNumber || sale._id,
-          getSaleDateStr(sale),
           sale.paymentMethod || "Cash",
           Array.isArray(sale.items)
-            ? sale.items.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0)
-            : 0,
-          sale.totalAmount ?? 0,
+            ? sale.items.reduce((sum, item) => sum + (Number(item.quantity ?? item.qty) || 1), 0)
+            : Number(sale.totalItems) || 1,
+          Number(sale.totalAmount || 0),
           Array.isArray(sale.items)
             ? sale.items
-                .map((i) => `${i.productName || i.name || "Item"} (x${i.quantity || 1})`)
+                .map((i) => `${i.productName || i.name || "Item"} (x${(i.quantity ?? i.qty) || 1})`)
                 .join("; ")
             : "",
         ]);
 
-        downloadCSV(`FISAT_Daily_Sales_${localToday}.csv`, headers, rows);
+        // Append Grand Total summary row
+        rows.push([
+          "GRAND TOTAL",
+          "",
+          "",
+          totalUnits,
+          totalRevenue,
+          "",
+        ]);
+
+        downloadCSV(`FISAT_Daily_Sales_${localToday}.csv`, salesHeaders, rows);
       }
       // 3. Monthly Sales
       else if (rawType.includes("month") || rawType === "3") {
@@ -222,31 +268,45 @@ export default function Statements() {
           return d.startsWith(localCurrentMonth) || d.startsWith(utcCurrentMonth);
         });
 
-        const headers = [
-          "Invoice Number",
-          "Date",
-          "Payment Method",
-          "Total Items",
-          "Total Amount (₹)",
-          "Items Summary",
-        ];
+        const totalRevenue = monthlySales.reduce(
+          (sum, sale) => sum + Number(sale.totalAmount || 0),
+          0
+        );
+        const totalUnits = monthlySales.reduce((sum, sale) => {
+          return (
+            sum +
+            (Array.isArray(sale.items)
+              ? sale.items.reduce((s, i) => s + (Number(i.quantity ?? i.qty) || 1), 0)
+              : Number(sale.totalItems) || 1)
+          );
+        }, 0);
 
         const rows = monthlySales.map((sale) => [
+          formatExcelDate(getSaleDateStr(sale)),
           sale.invoiceNumber || sale._id,
-          getSaleDateStr(sale),
           sale.paymentMethod || "Cash",
           Array.isArray(sale.items)
-            ? sale.items.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0)
-            : 0,
-          sale.totalAmount ?? 0,
+            ? sale.items.reduce((sum, item) => sum + (Number(item.quantity ?? item.qty) || 1), 0)
+            : Number(sale.totalItems) || 1,
+          Number(sale.totalAmount || 0),
           Array.isArray(sale.items)
             ? sale.items
-                .map((i) => `${i.productName || i.name || "Item"} (x${i.quantity || 1})`)
+                .map((i) => `${i.productName || i.name || "Item"} (x${(i.quantity ?? i.qty) || 1})`)
                 .join("; ")
             : "",
         ]);
 
-        downloadCSV(`FISAT_Monthly_Sales_${localCurrentMonth}.csv`, headers, rows);
+        // Append Grand Total summary row
+        rows.push([
+          "GRAND TOTAL",
+          "",
+          "",
+          totalUnits,
+          totalRevenue,
+          "",
+        ]);
+
+        downloadCSV(`FISAT_Monthly_Sales_${localCurrentMonth}.csv`, salesHeaders, rows);
       }
       // 5. Cash Only Sales
       else if (rawType.includes("cash") || rawType === "5") {
@@ -254,31 +314,45 @@ export default function Statements() {
           (sale) => String(sale.paymentMethod || "").trim().toLowerCase() === "cash"
         );
 
-        const headers = [
-          "Invoice Number",
-          "Date",
-          "Payment Method",
-          "Total Items",
-          "Total Amount (₹)",
-          "Items Summary",
-        ];
+        const totalRevenue = cashSales.reduce(
+          (sum, sale) => sum + Number(sale.totalAmount || 0),
+          0
+        );
+        const totalUnits = cashSales.reduce((sum, sale) => {
+          return (
+            sum +
+            (Array.isArray(sale.items)
+              ? sale.items.reduce((s, i) => s + (Number(i.quantity ?? i.qty) || 1), 0)
+              : Number(sale.totalItems) || 1)
+          );
+        }, 0);
 
         const rows = cashSales.map((sale) => [
+          formatExcelDate(getSaleDateStr(sale)),
           sale.invoiceNumber || sale._id,
-          getSaleDateStr(sale),
           "Cash",
           Array.isArray(sale.items)
-            ? sale.items.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0)
-            : 0,
-          sale.totalAmount ?? 0,
+            ? sale.items.reduce((sum, item) => sum + (Number(item.quantity ?? item.qty) || 1), 0)
+            : Number(sale.totalItems) || 1,
+          Number(sale.totalAmount || 0),
           Array.isArray(sale.items)
             ? sale.items
-                .map((i) => `${i.productName || i.name || "Item"} (x${i.quantity || 1})`)
+                .map((i) => `${i.productName || i.name || "Item"} (x${(i.quantity ?? i.qty) || 1})`)
                 .join("; ")
             : "",
         ]);
 
-        downloadCSV(`FISAT_Cash_Only_Sales_${localToday}.csv`, headers, rows);
+        // Append Grand Total summary row
+        rows.push([
+          "GRAND TOTAL",
+          "",
+          "",
+          totalUnits,
+          totalRevenue,
+          "",
+        ]);
+
+        downloadCSV(`FISAT_Cash_Only_Sales_${localToday}.csv`, salesHeaders, rows);
       }
       // 6. GPay Only Sales
       else if (rawType.includes("gpay") || rawType.includes("upi") || rawType === "6") {
@@ -287,31 +361,45 @@ export default function Statements() {
           return method === "gpay" || method === "upi";
         });
 
-        const headers = [
-          "Invoice Number",
-          "Date",
-          "Payment Method",
-          "Total Items",
-          "Total Amount (₹)",
-          "Items Summary",
-        ];
+        const totalRevenue = gpaySales.reduce(
+          (sum, sale) => sum + Number(sale.totalAmount || 0),
+          0
+        );
+        const totalUnits = gpaySales.reduce((sum, sale) => {
+          return (
+            sum +
+            (Array.isArray(sale.items)
+              ? sale.items.reduce((s, i) => s + (Number(i.quantity ?? i.qty) || 1), 0)
+              : Number(sale.totalItems) || 1)
+          );
+        }, 0);
 
         const rows = gpaySales.map((sale) => [
+          formatExcelDate(getSaleDateStr(sale)),
           sale.invoiceNumber || sale._id,
-          getSaleDateStr(sale),
           "GPay",
           Array.isArray(sale.items)
-            ? sale.items.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0)
-            : 0,
-          sale.totalAmount ?? 0,
+            ? sale.items.reduce((sum, item) => sum + (Number(item.quantity ?? item.qty) || 1), 0)
+            : Number(sale.totalItems) || 1,
+          Number(sale.totalAmount || 0),
           Array.isArray(sale.items)
             ? sale.items
-                .map((i) => `${i.productName || i.name || "Item"} (x${i.quantity || 1})`)
+                .map((i) => `${i.productName || i.name || "Item"} (x${(i.quantity ?? i.qty) || 1})`)
                 .join("; ")
             : "",
         ]);
 
-        downloadCSV(`FISAT_GPay_Only_Sales_${localToday}.csv`, headers, rows);
+        // Append Grand Total summary row
+        rows.push([
+          "GRAND TOTAL",
+          "",
+          "",
+          totalUnits,
+          totalRevenue,
+          "",
+        ]);
+
+        downloadCSV(`FISAT_GPay_Only_Sales_${localToday}.csv`, salesHeaders, rows);
       }
       // 7. Category-Wise Data
       else if (rawType.includes("cat") || rawType === "7") {

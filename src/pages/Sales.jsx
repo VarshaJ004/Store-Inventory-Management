@@ -21,6 +21,8 @@ function Sales() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  const [recentSales, setRecentSales] = useState([]);
+
   const [showPopup, setShowPopup] = useState(false);
   const [completedSaleData, setCompletedSaleData] = useState({
     amount: 0,
@@ -28,7 +30,27 @@ function Sales() {
   });
 
   // ========================================
-  // LOAD PRODUCTS
+  // FETCH RECENT SALES
+  // ========================================
+
+  const fetchRecentSales = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/sales`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      const salesList = Array.isArray(data)
+        ? data
+        : data?.sales || data?.data || [];
+      setRecentSales(salesList);
+    } catch (err) {
+      console.error("Recent sales fetch error:", err);
+    }
+  };
+
+  // ========================================
+  // LOAD PRODUCTS & RECENT SALES
   // ========================================
 
   useEffect(() => {
@@ -61,6 +83,15 @@ function Sales() {
         setError("Cannot load products from backend.");
         setLoading(false);
       });
+
+    fetchRecentSales();
+
+    const handleStockUpdate = () => {
+      loadProducts();
+      fetchRecentSales();
+    };
+    window.addEventListener("stockInUpdated", handleStockUpdate);
+    return () => window.removeEventListener("stockInUpdated", handleStockUpdate);
   }, []);
 
   const loadProducts = async () => {
@@ -417,6 +448,8 @@ function Sales() {
 
       await loadProducts();
       await loadFrequentlySold();
+      await fetchRecentSales();
+      window.dispatchEvent(new Event("stockInUpdated"));
 
     } catch (err) {
       console.error(err);
@@ -426,6 +459,37 @@ function Sales() {
       );
     } finally {
       setCompletingSale(false);
+    }
+  };
+
+  // ========================================
+  // DELETE SALE & REVERT STOCK
+  // ========================================
+
+  const handleDeleteSale = async (saleId, invoiceNumber) => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete transaction "${invoiceNumber || saleId}"?\n\nThis will automatically restore the sold items back to inventory stock.`
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      const response = await fetch(`${API_URL}/api/sales/${saleId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setRecentSales((prev) => prev.filter((s) => (s._id || s.id) !== saleId));
+        await loadProducts();
+        await loadFrequentlySold();
+        window.dispatchEvent(new Event("stockInUpdated"));
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        alert(`Failed to delete sale: ${errorData.message || "Unknown error"}`);
+      }
+    } catch (err) {
+      console.error("Error deleting sale:", err);
+      alert("Could not reach server to delete sale.");
     }
   };
 
@@ -671,6 +735,99 @@ function Sales() {
 
             </div>
 
+          )}
+
+        </section>
+
+        {/* ========================================
+            RECENT TRANSACTIONS
+        ======================================== */}
+
+        <section className="records-card sales-recent-card">
+
+          <div className="records-header">
+            <h2>Recent Transactions</h2>
+          </div>
+
+          {recentSales.length === 0 ? (
+            <p className="no-records-message">
+              No recent transactions recorded yet.
+            </p>
+          ) : (
+            <div className="records-table">
+
+              <div className="records-table-head">
+                <span>Date</span>
+                <span>Invoice</span>
+                <span>Total Items</span>
+                <span>Payment</span>
+                <span>Total Amount</span>
+                <span style={{ textAlign: "right" }}>Actions</span>
+              </div>
+
+              {recentSales.map((sale) => {
+                const saleId = sale._id || sale.id;
+
+                const totalItemsCount = Array.isArray(sale.items)
+                  ? sale.items.reduce(
+                      (sum, item) =>
+                        sum + (Number(item.quantity ?? item.qty) || 1),
+                      0
+                    )
+                  : Number(sale.totalItems) || 1;
+
+                let formattedDate = sale.date;
+                if (!formattedDate && sale.saleDate) {
+                  formattedDate = new Date(sale.saleDate).toLocaleDateString("en-IN");
+                } else if (formattedDate && formattedDate.includes("-")) {
+                  const parts = formattedDate.split("-");
+                  if (parts.length === 3 && parts[0].length === 4) {
+                    formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                  }
+                }
+
+                const paymentText =
+                  String(sale.paymentMethod || "Cash").toLowerCase() === "gpay"
+                    ? "GPay"
+                    : "Cash";
+
+                return (
+                  <div className="record-row" key={saleId}>
+
+                    <span>{formattedDate || "Today"}</span>
+
+                    <span style={{ fontWeight: "600", fontSize: "12px", color: "#475569" }}>
+                      {sale.invoiceNumber || String(saleId).slice(-8)}
+                    </span>
+
+                    <span>{totalItemsCount} items</span>
+
+                    <span>
+                      <span className={`payment-pill ${paymentText.toLowerCase()}`}>
+                        {paymentText}
+                      </span>
+                    </span>
+
+                    <strong style={{ color: "#0f172a" }}>
+                      ₹{Number(sale.totalAmount || 0).toLocaleString("en-IN")}
+                    </strong>
+
+                    <div className="record-actions">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSale(saleId, sale.invoiceNumber)}
+                        className="record-delete-btn"
+                        title="Delete Sale & Revert Stock"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                  </div>
+                );
+              })}
+
+            </div>
           )}
 
         </section>

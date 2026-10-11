@@ -1250,6 +1250,94 @@ app.get(
 );
 
 // ======================================================
+// DELETE SALE
+// Deletes sale record AND reverts stock back to inventory
+// ======================================================
+
+app.delete(
+  "/api/sales/:id",
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (
+        !id ||
+        id === "undefined" ||
+        id === "null"
+      ) {
+        return res.status(400).json({
+          message:
+            "Invalid ID parameter received.",
+        });
+      }
+
+      const filter =
+        mongoose.Types.ObjectId.isValid(id)
+          ? { _id: id }
+          : { id: id };
+
+      const sale =
+        await Sale.findOne(filter);
+
+      if (!sale) {
+        return res.status(404).json({
+          message:
+            "Sale record not found.",
+        });
+      }
+
+      // Revert stock: loop through sale.items and increment stock back into Product collection
+      if (Array.isArray(sale.items)) {
+        for (const item of sale.items) {
+          const productId = Number(item.productId ?? item.id);
+          const quantity = Number(item.qty !== undefined ? item.qty : (item.quantity ?? 0));
+
+          if (!isNaN(productId) && productId > 0 && quantity > 0) {
+            await Product.findOneAndUpdate(
+              { productId },
+              {
+                $inc: {
+                  stock: quantity,
+                  salesCount: -quantity,
+                },
+              }
+            );
+          } else if (item.productId && quantity > 0) {
+            await Product.findOneAndUpdate(
+              { _id: item.productId },
+              {
+                $inc: {
+                  stock: quantity,
+                  salesCount: -quantity,
+                },
+              }
+            );
+          }
+        }
+      }
+
+      // Delete Sale document from database
+      await Sale.findOneAndDelete(filter);
+
+      res.status(200).json({
+        message:
+          "Sale deleted and stock reverted successfully!",
+        deletedId: id,
+      });
+    } catch (err) {
+      console.error(
+        "Error deleting sale:",
+        err
+      );
+
+      res.status(500).json({
+        error: err.message,
+      });
+    }
+  }
+);
+
+// ======================================================
 // DASHBOARD
 // ======================================================
 
