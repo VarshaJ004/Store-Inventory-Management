@@ -781,6 +781,36 @@ app.get(
   }
 );
 
+// Reset all product stocks to 0
+app.post("/api/products/reset-stocks", async (req, res) => {
+  try {
+    await Product.updateMany({}, { stock: 0, salesCount: 0 });
+    res.status(200).json({ message: "All product stocks reset to 0 successfully." });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update specific product stock
+app.patch("/api/products/:productId", async (req, res) => {
+  try {
+    const { stock, price } = req.body;
+    const update = {};
+    if (stock !== undefined) update.stock = Math.max(0, Number(stock));
+    if (price !== undefined) update.price = Number(price);
+
+    const product = await Product.findOneAndUpdate(
+      { productId: Number(req.params.productId) },
+      update,
+      { new: true }
+    );
+    if (!product) return res.status(404).json({ message: "Product not found" });
+    res.status(200).json(product);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ======================================================
 // GET STOCK-IN RECORDS
 // ======================================================
@@ -913,30 +943,16 @@ app.delete(
 
       // Revert stock
       for (const item of bill.products) {
-        const product =
-          await Product.findOne({
-            productId:
-              Number(item.productId),
-          });
-
-        if (product) {
-          const updatedStock =
-            Math.max(
-              0,
-              (product.stock || 0) -
-                Number(item.quantity)
-            );
-
-          await Product.findOneAndUpdate(
-            {
-              productId:
-                Number(item.productId),
+        await Product.findOneAndUpdate(
+          {
+            productId: Number(item.productId),
+          },
+          {
+            $inc: {
+              stock: -Number(item.quantity),
             },
-            {
-              stock: updatedStock,
-            }
-          );
-        }
+          }
+        );
       }
 
       // Delete invoice

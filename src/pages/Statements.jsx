@@ -577,8 +577,6 @@ export default function Statements() {
       badge: "Available",
       isLive: true,
       icon: "📦",
-      description:
-        "Full list of store inventory with item titles, categories, unit prices, and active on-hand quantities.",
       action: handleDownloadCurrentInventory,
       buttonLabel: "Download CSV",
     },
@@ -588,8 +586,6 @@ export default function Statements() {
       badge: "Available",
       isLive: true,
       icon: "⚠️",
-      description:
-        "Filtered inventory report showing items with 10 or fewer units in stock requiring restocking.",
       action: handleDownloadLowStocks,
       buttonLabel: "Download CSV",
     },
@@ -599,8 +595,6 @@ export default function Statements() {
       badge: "Available",
       isLive: true,
       icon: "📅",
-      description:
-        "Monthly revenue summaries, completed register orders, and transaction aggregates across billing cycles.",
       action: () => handleDownloadSalesReport("monthly"),
       buttonLabel: "Download CSV",
     },
@@ -610,8 +604,6 @@ export default function Statements() {
       badge: "Available",
       isLive: true,
       icon: "📊",
-      description:
-        "Itemized daily counter receipts, shift transaction logs, and daily gross billing totals.",
       action: () => handleDownloadSalesReport("daily"),
       buttonLabel: "Download CSV",
     },
@@ -621,8 +613,6 @@ export default function Statements() {
       badge: "Available",
       isLive: true,
       icon: "💵",
-      description:
-        "All transactions fulfilled and verified strictly using physical cash payments and drawer reconciliations.",
       action: () => handleDownloadSalesReport("cash"),
       buttonLabel: "Download CSV",
     },
@@ -632,8 +622,6 @@ export default function Statements() {
       badge: "Available",
       isLive: true,
       icon: "📱",
-      description:
-        "All register sales completed through UPI and Google Pay with payment reference records.",
       action: () => handleDownloadSalesReport("gpay"),
       buttonLabel: "Download CSV",
     },
@@ -643,8 +631,6 @@ export default function Statements() {
       badge: "Available",
       isLive: true,
       icon: "🏷️",
-      description:
-        "Analytical distribution grouping units sold and remaining volumes across books, pens, and stationery.",
       action: () => handleDownloadSalesReport("category"),
       buttonLabel: "Download CSV",
     },
@@ -654,8 +640,6 @@ export default function Statements() {
       badge: "Available",
       isLive: true,
       icon: "📈",
-      description:
-        "Popularity breakdown ranking store items by total units purchased and sales velocity.",
       action: () => handleDownloadSalesReport("volume"),
       buttonLabel: "Download CSV",
     },
@@ -692,7 +676,6 @@ export default function Statements() {
 
               <div className="statement-card-body">
                 <h3>{report.title}</h3>
-                <p>{report.description}</p>
               </div>
             </div>
 

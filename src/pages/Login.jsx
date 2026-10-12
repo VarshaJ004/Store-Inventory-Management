@@ -22,6 +22,7 @@ function Login() {
   const [modelsLoaded, setModelsLoaded] = useState(false);
 
   useEffect(() => {
+    localStorage.removeItem("user");
     loadFaceModels();
 
     return () => {
@@ -183,7 +184,7 @@ function Login() {
         stopCamera();
 
         // Store active session
-        localStorage.setItem(
+        sessionStorage.setItem(
           "user",
           JSON.stringify({
             name: bestMatch.user.name,
@@ -239,7 +240,7 @@ function Login() {
 
       if (res.ok) {
         const data = await res.json();
-        localStorage.setItem(
+        sessionStorage.setItem(
           "user",
           JSON.stringify(data.user || { username, name: username, role: "Staff" })
         );
@@ -249,7 +250,7 @@ function Login() {
 
       // Fallback for default admin if server offline
       if (username.trim().toLowerCase() === "admin" && password === "admin123") {
-        localStorage.setItem(
+        sessionStorage.setItem(
           "user",
           JSON.stringify({
             username: "admin",
@@ -266,7 +267,7 @@ function Login() {
     } catch (err) {
       // Offline fallback
       if (username.trim().toLowerCase() === "admin" && password === "admin123") {
-        localStorage.setItem(
+        sessionStorage.setItem(
           "user",
           JSON.stringify({
             username: "admin",

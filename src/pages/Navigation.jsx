@@ -5,6 +5,7 @@ function Navigation() {
   const navigate = useNavigate();
 
   const handleLogout = () => {
+    sessionStorage.removeItem("user");
     localStorage.removeItem("user");
     navigate("/login");
   };

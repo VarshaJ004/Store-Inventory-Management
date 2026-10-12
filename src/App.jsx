@@ -41,16 +41,11 @@ function MainLayout() {
 }
 
 function ProtectedLayout() {
-  const user = localStorage.getItem("user");
+  const user = sessionStorage.getItem("user");
   if (!user) {
     return <Navigate to="/login" replace />;
   }
   return <MainLayout />;
-}
-
-function RootRedirect() {
-  const user = localStorage.getItem("user");
-  return user ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />;
 }
 
 export default function App() {
@@ -71,8 +66,8 @@ export default function App() {
         </Route>
 
         {/* Root and Fallback Navigation */}
-        <Route path="/" element={<RootRedirect />} />
-        <Route path="*" element={<RootRedirect />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   );
