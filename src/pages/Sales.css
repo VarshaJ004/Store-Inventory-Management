@@ -208,6 +208,7 @@
   
   /* PRODUCT CARD */
   
+  .sales-card,
   .sales-product-card {
     min-height: 285px;
   
@@ -229,6 +230,7 @@
       box-shadow 0.2s ease;
   }
   
+  .sales-card:hover,
   .sales-product-card:hover {
     transform: translateY(-2px);
   
@@ -274,6 +276,7 @@
   
   /* ICON */
   
+  .card-icon,
   .product-icon {
     height: 80px;
   
@@ -286,6 +289,7 @@
     color: #536273;
   
     font-size: 45px;
+    user-select: none;
   }
   
   

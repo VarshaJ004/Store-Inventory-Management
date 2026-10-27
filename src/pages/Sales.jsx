@@ -678,17 +678,7 @@ function Sales() {
 
                       </div>
 
-                      <div className="product-icon">
-                        {getSalesCategory(
-                          product
-                        ) === "Pens"
-                          ? "✎"
-                          : getSalesCategory(
-                              product
-                            ) === "Books"
-                          ? "▤"
-                          : "□"}
-                      </div>
+                      <div className="card-icon">𖤦</div>
 
                       <div className="product-card-info">
 
